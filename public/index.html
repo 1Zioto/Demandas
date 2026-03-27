@@ -1,0 +1,1045 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Vipe Transportes — Demandas Dev</title>
+  <meta name="description" content="Sistema de gerenciamento de demandas de desenvolvimento da Vipe Transportes" />
+  <meta name="theme-color" content="#0a0a0b" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,300&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+  <style>
+    :root {
+      --font-display: 'Syne', sans-serif;
+      --font-body: 'DM Sans', sans-serif;
+      --font-mono: 'DM Mono', monospace;
+      --bg-primary: #0a0a0b;
+      --bg-secondary: #111113;
+      --bg-card: #18181b;
+      --bg-card-hover: #1f1f23;
+      --border: #2a2a2f;
+      --border-accent: #3a3a40;
+      --text-primary: #f4f4f5;
+      --text-secondary: #a1a1aa;
+      --text-muted: #52525b;
+      --accent-orange: #f97316;
+      --accent-orange-dim: #9a3412;
+      --accent-orange-glow: rgba(249,115,22,0.15);
+      --accent-blue: #3b82f6;
+      --accent-green: #22c55e;
+      --accent-red: #ef4444;
+      --accent-yellow: #eab308;
+      --accent-purple: #a855f7;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      background-color: var(--bg-primary);
+      color: var(--text-primary);
+      font-family: var(--font-body);
+      font-size: 15px;
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+    }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: var(--bg-primary); }
+    ::-webkit-scrollbar-thumb { background: var(--border-accent); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+    ::selection { background: var(--accent-orange-glow); color: var(--accent-orange); }
+    *:focus-visible { outline: 2px solid var(--accent-orange); outline-offset: 2px; border-radius: 4px; }
+    input:-webkit-autofill, input:-webkit-autofill:hover, input:-webkit-autofill:focus {
+      -webkit-box-shadow: 0 0 0px 1000px var(--bg-card) inset;
+      -webkit-text-fill-color: var(--text-primary);
+    }
+    input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.5); cursor: pointer; }
+    .tag-badge {
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 2px 8px; border-radius: 99px;
+      font-size: 11px; font-weight: 500;
+      font-family: var(--font-mono); letter-spacing: 0.02em; text-transform: uppercase;
+    }
+    @keyframes glow-pulse {
+      0%, 100% { box-shadow: 0 0 0 0 var(--accent-orange-glow); }
+      50% { box-shadow: 0 0 0 8px transparent; }
+    }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes scaleIn { from { opacity: 0; transform: scale(0.96); } to { opacity: 1; transform: scale(1); } }
+    .glow-badge { animation: glow-pulse 2s ease-in-out infinite; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel" data-presets="react">
+    const { useState, useEffect, useMemo, useCallback } = React;
+
+    // ─── CONFIG ────────────────────────────────────────────────────────────────
+
+    const PRIORITY_CONFIG = {
+      'crítica': { label: 'Crítica', color: '#ef4444', bg: 'rgba(239,68,68,0.1)', border: 'rgba(239,68,68,0.3)' },
+      'alta':    { label: 'Alta',    color: '#f97316', bg: 'rgba(249,115,22,0.1)', border: 'rgba(249,115,22,0.3)' },
+      'média':   { label: 'Média',   color: '#eab308', bg: 'rgba(234,179,8,0.1)',  border: 'rgba(234,179,8,0.3)' },
+      'baixa':   { label: 'Baixa',   color: '#22c55e', bg: 'rgba(34,197,94,0.1)',  border: 'rgba(34,197,94,0.3)' },
+    };
+
+    const STATUS_CONFIG = {
+      'backlog':            { label: 'Backlog',           color: '#71717a', bg: 'rgba(113,113,122,0.1)', border: 'rgba(113,113,122,0.3)', icon: '○' },
+      'em_analise':         { label: 'Em Análise',        color: '#3b82f6', bg: 'rgba(59,130,246,0.1)',  border: 'rgba(59,130,246,0.3)',  icon: '◐' },
+      'em_desenvolvimento': { label: 'Em Desenvolvimento',color: '#f97316', bg: 'rgba(249,115,22,0.1)', border: 'rgba(249,115,22,0.3)', icon: '◑' },
+      'em_teste':           { label: 'Em Teste',          color: '#a855f7', bg: 'rgba(168,85,247,0.1)', border: 'rgba(168,85,247,0.3)', icon: '◕' },
+      'concluída':          { label: 'Concluída',         color: '#22c55e', bg: 'rgba(34,197,94,0.1)',  border: 'rgba(34,197,94,0.3)',  icon: '●' },
+      'cancelada':          { label: 'Cancelada',         color: '#ef4444', bg: 'rgba(239,68,68,0.08)', border: 'rgba(239,68,68,0.2)', icon: '✕' },
+    };
+
+    const CATEGORY_CONFIG = {
+      'feature':        { label: 'Nova Funcionalidade', icon: '✦', color: '#3b82f6' },
+      'bug':            { label: 'Correção de Bug',     icon: '⚠', color: '#ef4444' },
+      'melhoria':       { label: 'Melhoria',            icon: '↑', color: '#f97316' },
+      'infraestrutura': { label: 'Infraestrutura',      icon: '⚙', color: '#71717a' },
+      'integracao':     { label: 'Integração',          icon: '⇌', color: '#a855f7' },
+      'relatorio':      { label: 'Relatório',           icon: '▤', color: '#22c55e' },
+    };
+
+    const TEAM_MEMBERS = ['Carlos Silva','Ana Lima','Rodrigo Santos','Patricia Oliveira','Fernando Costa','Juliana Martins','Lucas Pereira'];
+
+    const KANBAN_COLUMNS = ['backlog','em_analise','em_desenvolvimento','em_teste','concluída'];
+
+    // ─── UTILS ─────────────────────────────────────────────────────────────────
+
+    function uuid() {
+      return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+        const r = Math.random() * 16 | 0;
+        return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+      });
+    }
+
+    function timeAgo(iso) {
+      const diff = Date.now() - new Date(iso).getTime();
+      const mins = Math.floor(diff / 60000);
+      if (mins < 1) return 'agora';
+      if (mins < 60) return `há ${mins} min`;
+      const hours = Math.floor(mins / 60);
+      if (hours < 24) return `há ${hours}h`;
+      const days = Math.floor(hours / 24);
+      if (days < 30) return `há ${days}d`;
+      const months = Math.floor(days / 30);
+      return `há ${months} meses`;
+    }
+
+    function formatDate(iso) {
+      if (!iso) return '—';
+      const d = new Date(iso);
+      return d.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });
+    }
+
+    function isPast(iso) {
+      return iso && new Date(iso).getTime() < Date.now();
+    }
+
+    // ─── STORE ─────────────────────────────────────────────────────────────────
+
+    const STORAGE_KEY = 'vipe_demands_v1';
+
+    function makeMockDemands() {
+      const now = Date.now();
+      const d = (days) => new Date(now + days * 86400000).toISOString();
+      return [
+        {
+          id: uuid(), title: 'Integração com sistema de rastreamento GPS',
+          description: 'Implementar integração com API do sistema de rastreamento de frota para exibir posição em tempo real dos veículos no painel administrativo.',
+          category: 'integracao', priority: 'crítica', status: 'em_desenvolvimento',
+          requester: 'Diretoria Operacional', assignee: 'Carlos Silva',
+          createdAt: d(-10), updatedAt: d(-2), dueDate: d(7),
+          tags: ['GPS','API','Frota'], comments: [{id:uuid(),author:'Carlos Silva',text:'Iniciando mapeamento da API do fornecedor. Documentação recebida.',createdAt:d(-5)}], progress: 35,
+        },
+        {
+          id: uuid(), title: 'Dashboard de KPIs de entrega',
+          description: 'Criar painel com indicadores chave de performance das entregas: taxa de conclusão no prazo, tempo médio de entrega, ocorrências por rota.',
+          category: 'relatorio', priority: 'alta', status: 'em_analise',
+          requester: 'Gerência de Logística', assignee: 'Ana Lima',
+          createdAt: d(-7), updatedAt: d(-1), dueDate: d(14),
+          tags: ['KPI','Dashboard','Analytics'], comments: [], progress: 10,
+        },
+        {
+          id: uuid(), title: 'Bug: Cálculo incorreto de frete em rotas interestaduais',
+          description: 'O sistema está calculando o valor do frete sem considerar o ICMS diferencial para rotas entre estados. Afeta faturas emitidas desde 15/03.',
+          category: 'bug', priority: 'crítica', status: 'em_teste',
+          requester: 'Financeiro', assignee: 'Rodrigo Santos',
+          createdAt: d(-3), updatedAt: d(-0.2), dueDate: d(2),
+          tags: ['Bug','Frete','Fiscal','ICMS'],
+          comments: [{id:uuid(),author:'Rodrigo Santos',text:'Identificado o ponto de falha na tabela de alíquotas. Correção aplicada em staging.',createdAt:d(-0.5)}], progress: 80,
+        },
+        {
+          id: uuid(), title: 'Portal do motorista — App mobile',
+          description: 'Desenvolver aplicativo mobile para motoristas: aceitar/recusar cargas, registrar ocorrências na rota, assinar digitalmente comprovantes de entrega.',
+          category: 'feature', priority: 'alta', status: 'backlog',
+          requester: 'Operações', assignee: undefined,
+          createdAt: d(-20), updatedAt: d(-20), dueDate: d(60),
+          tags: ['Mobile','Motorista','App'], comments: [], progress: 0,
+        },
+        {
+          id: uuid(), title: 'Migração de servidor para cloud AWS',
+          description: 'Migrar infraestrutura do sistema legado para AWS EC2 + RDS. Objetivo: reduzir latência e aumentar disponibilidade para 99.9%.',
+          category: 'infraestrutura', priority: 'média', status: 'em_desenvolvimento',
+          requester: 'TI', assignee: 'Lucas Pereira',
+          createdAt: d(-15), updatedAt: d(-3), dueDate: d(30),
+          tags: ['AWS','Cloud','Infraestrutura'], comments: [], progress: 55,
+        },
+        {
+          id: uuid(), title: 'Relatório automático de manutenção da frota',
+          description: 'Sistema de alertas automáticos para manutenções preventivas com base em quilometragem e tempo de uso.',
+          category: 'melhoria', priority: 'média', status: 'concluída',
+          requester: 'Manutenção', assignee: 'Patricia Oliveira',
+          createdAt: d(-45), updatedAt: d(-5), dueDate: d(-5),
+          tags: ['Manutenção','Alerta','Frota'],
+          comments: [{id:uuid(),author:'Patricia Oliveira',text:'Funcionalidade entregue e validada pelo setor.',createdAt:d(-5)}], progress: 100,
+        },
+      ];
+    }
+
+    function loadDemands() {
+      try {
+        const s = localStorage.getItem(STORAGE_KEY);
+        if (s) return JSON.parse(s);
+      } catch {}
+      const mock = makeMockDemands();
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(mock));
+      return mock;
+    }
+
+    function saveDemands(demands) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(demands));
+    }
+
+    // ─── AVATAR ────────────────────────────────────────────────────────────────
+
+    function Avatar({ name, size = 22 }) {
+      if (!name) return null;
+      const initials = name.split(' ').map(n => n[0]).join('').slice(0, 2);
+      const hue = name.charCodeAt(0) * 7 % 360;
+      return (
+        <div style={{
+          width: size, height: size, borderRadius: '50%',
+          background: `hsl(${hue}, 60%, 35%)`,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: size * 0.42, fontWeight: 700, color: '#fff', flexShrink: 0,
+        }}>{initials}</div>
+      );
+    }
+
+    // ─── DEMAND CARD ───────────────────────────────────────────────────────────
+
+    function DemandCard({ demand, onClick, compact }) {
+      const [hovered, setHovered] = useState(false);
+      const priority = PRIORITY_CONFIG[demand.priority];
+      const status = STATUS_CONFIG[demand.status];
+      const category = CATEGORY_CONFIG[demand.category];
+      const overdue = isPast(demand.dueDate) && demand.status !== 'concluída' && demand.status !== 'cancelada';
+
+      return (
+        <div
+          onClick={onClick}
+          onMouseEnter={() => setHovered(true)}
+          onMouseLeave={() => setHovered(false)}
+          style={{
+            background: hovered ? 'var(--bg-card-hover)' : 'var(--bg-card)',
+            border: `1px solid ${hovered ? 'var(--border-accent)' : (overdue ? 'rgba(239,68,68,0.4)' : 'var(--border)')}`,
+            borderLeft: `3px solid ${priority.color}`,
+            borderRadius: 10,
+            padding: compact ? '12px 14px' : '14px 16px',
+            cursor: 'pointer',
+            transition: 'all 0.2s',
+            transform: hovered ? 'translateY(-1px)' : 'translateY(0)',
+            boxShadow: hovered ? '0 4px 20px rgba(0,0,0,0.3)' : 'none',
+            animation: 'fadeIn 0.3s ease-out',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8, marginBottom: 8 }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{
+                fontSize: compact ? 13 : 14, fontWeight: 600,
+                color: 'var(--text-primary)', lineHeight: 1.3, marginBottom: 4,
+                overflow: 'hidden', display: '-webkit-box',
+                WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
+              }}>{demand.title}</div>
+            </div>
+            <span className="tag-badge" style={{ background: priority.bg, color: priority.color, border: `1px solid ${priority.border}`, flexShrink: 0, fontSize: 10 }}>
+              {demand.priority === 'crítica' && <span className="glow-badge" style={{ display: 'inline-block' }}>●</span>}
+              {demand.priority}
+            </span>
+          </div>
+
+          {!compact && (
+            <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.5, marginBottom: 10, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
+              {demand.description}
+            </div>
+          )}
+
+          {demand.progress > 0 && demand.status !== 'backlog' && (
+            <div style={{ marginBottom: 10 }}>
+              <div style={{ height: 3, background: 'var(--border)', borderRadius: 2, overflow: 'hidden' }}>
+                <div style={{
+                  height: '100%', width: `${demand.progress}%`, borderRadius: 2,
+                  background: demand.status === 'concluída' ? 'linear-gradient(90deg,#22c55e,#16a34a)' : 'linear-gradient(90deg,#f97316,#ea580c)',
+                  transition: 'width 0.5s ease',
+                }} />
+              </div>
+            </div>
+          )}
+
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 4 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 11, color: category.color, fontFamily: 'var(--font-mono)', display: 'flex', alignItems: 'center', gap: 3 }}>
+                <span>{category.icon}</span>
+                <span style={{ color: 'var(--text-muted)' }}>{category.label}</span>
+              </span>
+              {demand.tags.slice(0, compact ? 1 : 2).map(tag => (
+                <span key={tag} style={{ fontSize: 10, color: 'var(--text-muted)', background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 4, padding: '1px 6px', fontFamily: 'var(--font-mono)' }}>#{tag}</span>
+              ))}
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              {demand.assignee && <Avatar name={demand.assignee} />}
+              {overdue && <span style={{ fontSize: 10, color: '#ef4444', fontFamily: 'var(--font-mono)' }}>⚠ atrasada</span>}
+              {demand.comments.length > 0 && <span style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>💬 {demand.comments.length}</span>}
+              <span style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>{timeAgo(demand.updatedAt)}</span>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // ─── KANBAN VIEW ───────────────────────────────────────────────────────────
+
+    function KanbanView({ demands, onCardClick, onStatusChange }) {
+      const [dragId, setDragId] = useState(null);
+      const [dragOverCol, setDragOverCol] = useState(null);
+
+      return (
+        <div style={{ display: 'flex', gap: 12, padding: '16px 24px', overflowX: 'auto', minHeight: 'calc(100vh - 180px)', alignItems: 'flex-start' }}>
+          {KANBAN_COLUMNS.map(status => {
+            const config = STATUS_CONFIG[status];
+            const colDemands = demands.filter(d => d.status === status);
+            const isDragOver = dragOverCol === status;
+
+            return (
+              <div
+                key={status}
+                style={{ flexShrink: 0, width: 280 }}
+                onDragOver={e => { e.preventDefault(); setDragOverCol(status); }}
+                onDragLeave={() => setDragOverCol(null)}
+                onDrop={e => {
+                  e.preventDefault();
+                  if (dragId) { onStatusChange(dragId, status); setDragId(null); }
+                  setDragOverCol(null);
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 2px 10px', marginBottom: 8, borderBottom: `2px solid ${config.color}` }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                    <span style={{ color: config.color, fontSize: 14 }}>{config.icon}</span>
+                    <span style={{ fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 13, color: 'var(--text-primary)', letterSpacing: '-0.2px' }}>{config.label}</span>
+                  </div>
+                  <span style={{ background: config.bg, border: `1px solid ${config.border}`, borderRadius: 12, color: config.color, fontSize: 11, fontFamily: 'var(--font-mono)', fontWeight: 700, padding: '1px 7px' }}>{colDemands.length}</span>
+                </div>
+
+                <div style={{
+                  display: 'flex', flexDirection: 'column', gap: 8, minHeight: 80,
+                  background: isDragOver ? config.bg : 'transparent',
+                  borderRadius: 10,
+                  border: isDragOver ? `1px dashed ${config.border}` : '1px dashed transparent',
+                  padding: isDragOver ? 6 : 0,
+                  transition: 'all 0.2s',
+                }}>
+                  {colDemands.length === 0 && !isDragOver && (
+                    <div style={{ height: 60, border: '1px dashed var(--border)', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', fontSize: 11, fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Vazio</div>
+                  )}
+                  {colDemands.map(demand => (
+                    <div
+                      key={demand.id}
+                      draggable
+                      onDragStart={() => setDragId(demand.id)}
+                      onDragEnd={() => setDragId(null)}
+                      style={{ opacity: dragId === demand.id ? 0.5 : 1, cursor: 'grab', transition: 'opacity 0.2s' }}
+                    >
+                      <DemandCard demand={demand} onClick={() => onCardClick(demand)} compact />
+                    </div>
+                  ))}
+                  {isDragOver && <div style={{ height: 3, background: config.color, borderRadius: 2, opacity: 0.6 }} />}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      );
+    }
+
+    // ─── LIST VIEW ─────────────────────────────────────────────────────────────
+
+    function ListView({ demands, onCardClick }) {
+      return (
+        <div style={{ padding: '16px 24px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 120px 100px 130px 140px 90px', gap: 12, padding: '8px 14px', marginBottom: 4, borderBottom: '1px solid var(--border)' }}>
+            {['Demanda','Categoria','Prioridade','Status','Responsável','Atualizado'].map(col => (
+              <span key={col} style={{ fontSize: 10, fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)' }}>{col}</span>
+            ))}
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            {demands.length === 0 ? (
+              <div style={{ padding: 48, textAlign: 'center', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: 13 }}>Nenhuma demanda encontrada</div>
+            ) : demands.map(demand => {
+              const priority = PRIORITY_CONFIG[demand.priority];
+              const status = STATUS_CONFIG[demand.status];
+              const category = CATEGORY_CONFIG[demand.category];
+              const overdue = isPast(demand.dueDate) && demand.status !== 'concluída' && demand.status !== 'cancelada';
+
+              return (
+                <ListRow key={demand.id} demand={demand} priority={priority} status={status} category={category} overdue={overdue} onClick={() => onCardClick(demand)} />
+              );
+            })}
+          </div>
+        </div>
+      );
+    }
+
+    function ListRow({ demand, priority, status, category, overdue, onClick }) {
+      const [hovered, setHovered] = useState(false);
+      return (
+        <div
+          onClick={onClick}
+          onMouseEnter={() => setHovered(true)}
+          onMouseLeave={() => setHovered(false)}
+          style={{
+            display: 'grid', gridTemplateColumns: '1fr 120px 100px 130px 140px 90px',
+            gap: 12, padding: '12px 14px', borderRadius: 8, cursor: 'pointer',
+            border: hovered ? '1px solid var(--border)' : '1px solid transparent',
+            borderLeft: `3px solid ${priority.color}`,
+            background: hovered ? 'var(--bg-card)' : (overdue ? 'rgba(239,68,68,0.03)' : 'transparent'),
+            transition: 'all 0.15s', alignItems: 'center', animation: 'fadeIn 0.3s ease-out',
+          }}
+        >
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)', marginBottom: 3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{demand.title}</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              {demand.tags.slice(0, 2).map(t => <span key={t} style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>#{t}</span>)}
+              {overdue && <span style={{ fontSize: 10, color: '#ef4444', fontFamily: 'var(--font-mono)' }}>⚠ atrasada</span>}
+              {demand.comments.length > 0 && <span style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>💬 {demand.comments.length}</span>}
+            </div>
+          </div>
+          <span style={{ fontSize: 11, color: category.color, fontFamily: 'var(--font-mono)', display: 'flex', alignItems: 'center', gap: 4, overflow: 'hidden' }}>
+            <span>{category.icon}</span>
+            <span style={{ color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{category.label}</span>
+          </span>
+          <span className="tag-badge" style={{ background: priority.bg, color: priority.color, border: `1px solid ${priority.border}`, fontSize: 10, justifySelf: 'start' }}>{demand.priority}</span>
+          <span className="tag-badge" style={{ background: status.bg, color: status.color, border: `1px solid ${status.border}`, fontSize: 10, justifySelf: 'start', gap: 4 }}>
+            <span>{status.icon}</span>
+            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{status.label}</span>
+          </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            {demand.assignee ? (
+              <><Avatar name={demand.assignee} /><span style={{ fontSize: 12, color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{demand.assignee.split(' ')[0]}</span></>
+            ) : (
+              <span style={{ fontSize: 11, color: 'var(--text-muted)', fontStyle: 'italic' }}>—</span>
+            )}
+          </div>
+          <span style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{timeAgo(demand.updatedAt)}</span>
+        </div>
+      );
+    }
+
+    // ─── FILTER BAR ────────────────────────────────────────────────────────────
+
+    function FilterBar({ filters, onChange, totalCount, filteredCount }) {
+      const set = (k, v) => onChange({ ...filters, [k]: v });
+      const hasFilters = filters.search || filters.status !== 'todas' || filters.priority !== 'todas' || filters.category !== 'todas' || filters.assignee;
+      const selStyle = { background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 7, color: 'var(--text-secondary)', fontSize: 12, fontFamily: 'var(--font-mono)', padding: '6px 10px', outline: 'none', cursor: 'pointer' };
+
+      return (
+        <div style={{ background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border)', padding: '10px 24px', display: 'flex', alignItems: 'center', gap: 10, overflowX: 'auto' }}>
+          <div style={{ position: 'relative', flexShrink: 0 }}>
+            <span style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', fontSize: 14, pointerEvents: 'none' }}>⌕</span>
+            <input value={filters.search} onChange={e => set('search', e.target.value)} placeholder="Buscar demandas..."
+              style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 7, color: 'var(--text-primary)', fontSize: 13, padding: '6px 12px 6px 30px', outline: 'none', width: 200 }} />
+          </div>
+          <div style={{ width: 1, height: 24, background: 'var(--border)', flexShrink: 0 }} />
+          <select value={filters.status} onChange={e => set('status', e.target.value)} style={selStyle}>
+            <option value="todas">○ Todos status</option>
+            {Object.entries(STATUS_CONFIG).map(([k, v]) => <option key={k} value={k}>{v.icon} {v.label}</option>)}
+          </select>
+          <select value={filters.priority} onChange={e => set('priority', e.target.value)} style={selStyle}>
+            <option value="todas">◆ Todas prioridades</option>
+            {Object.entries(PRIORITY_CONFIG).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+          </select>
+          <select value={filters.category} onChange={e => set('category', e.target.value)} style={selStyle}>
+            <option value="todas">▦ Todas categorias</option>
+            {Object.entries(CATEGORY_CONFIG).map(([k, v]) => <option key={k} value={k}>{v.icon} {v.label}</option>)}
+          </select>
+          <select value={filters.assignee} onChange={e => set('assignee', e.target.value)} style={selStyle}>
+            <option value="">👤 Todos responsáveis</option>
+            {TEAM_MEMBERS.map(m => <option key={m} value={m}>{m}</option>)}
+          </select>
+          {hasFilters && (
+            <button onClick={() => onChange({ search: '', status: 'todas', priority: 'todas', category: 'todas', assignee: '' })}
+              style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: 7, color: '#ef4444', fontSize: 11, fontFamily: 'var(--font-mono)', padding: '6px 10px', cursor: 'pointer', flexShrink: 0, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              ✕ Limpar
+            </button>
+          )}
+          <div style={{ marginLeft: 'auto', flexShrink: 0 }}>
+            <span style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+              {filteredCount === totalCount ? `${totalCount} demandas` : <>{filteredCount < totalCount && <span style={{ color: 'var(--accent-orange)' }}>{filteredCount}</span>}{filteredCount < totalCount && ` de ${totalCount}`}</>}
+            </span>
+          </div>
+        </div>
+      );
+    }
+
+    // ─── HEADER ────────────────────────────────────────────────────────────────
+
+    function Header({ demands, onNewDemand, view, onViewChange }) {
+      const total = demands.length;
+      const inProgress = demands.filter(d => d.status === 'em_desenvolvimento').length;
+      const critical = demands.filter(d => d.priority === 'crítica' && d.status !== 'concluída' && d.status !== 'cancelada').length;
+      const done = demands.filter(d => d.status === 'concluída').length;
+
+      return (
+        <header style={{ background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border)', position: 'sticky', top: 0, zIndex: 50 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 24px', height: 56, borderBottom: '1px solid var(--border)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div style={{ width: 32, height: 32, background: 'linear-gradient(135deg,#f97316,#c2410c)', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 800, fontFamily: 'var(--font-display)', color: '#fff', letterSpacing: '-0.5px' }}>V</div>
+              <div>
+                <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 15, color: 'var(--text-primary)', letterSpacing: '-0.3px', lineHeight: 1 }}>VIPE TRANSPORTES</div>
+                <div style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.08em', marginTop: 1 }}>Sistema de Demandas</div>
+              </div>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{ display: 'flex', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 8, padding: 3, gap: 2 }}>
+                {['kanban','list'].map(v => (
+                  <button key={v} onClick={() => onViewChange(v)}
+                    style={{ background: view === v ? 'var(--bg-card-hover)' : 'transparent', border: view === v ? '1px solid var(--border-accent)' : '1px solid transparent', borderRadius: 5, color: view === v ? 'var(--text-primary)' : 'var(--text-muted)', padding: '4px 10px', fontSize: 12, fontFamily: 'var(--font-mono)', cursor: 'pointer', transition: 'all 0.15s', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    {v === 'kanban' ? '⊞ Kanban' : '≡ Lista'}
+                  </button>
+                ))}
+              </div>
+              <button onClick={onNewDemand}
+                style={{ background: 'var(--accent-orange)', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 16px', fontSize: 13, fontWeight: 600, fontFamily: 'var(--font-body)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, transition: 'all 0.15s' }}
+                onMouseEnter={e => e.currentTarget.style.background = '#ea580c'}
+                onMouseLeave={e => e.currentTarget.style.background = 'var(--accent-orange)'}>
+                <span style={{ fontSize: 16, lineHeight: 1 }}>+</span> Nova Demanda
+              </button>
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: 0, padding: '0 24px', overflowX: 'auto' }}>
+            {[
+              { label: 'Total', value: total, color: 'var(--text-secondary)' },
+              { label: 'Em Dev', value: inProgress, color: '#f97316' },
+              { label: 'Críticas', value: critical, color: '#ef4444' },
+              { label: 'Concluídas', value: done, color: '#22c55e' },
+            ].map((stat, i) => (
+              <div key={i} style={{ padding: '10px 20px 10px 0', marginRight: 20, borderRight: i < 3 ? '1px solid var(--border)' : 'none', paddingRight: 20 }}>
+                <div style={{ fontSize: 22, fontWeight: 700, fontFamily: 'var(--font-display)', color: stat.color, lineHeight: 1 }}>{stat.value}</div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginTop: 2 }}>{stat.label}</div>
+              </div>
+            ))}
+            <div style={{ flex: 1, display: 'flex', alignItems: 'center', paddingLeft: 8 }}>
+              <div style={{ width: '100%', maxWidth: 200 }}>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
+                  Progresso Geral — {total > 0 ? Math.round((done / total) * 100) : 0}%
+                </div>
+                <div style={{ height: 4, background: 'var(--bg-card)', borderRadius: 2, overflow: 'hidden', border: '1px solid var(--border)' }}>
+                  <div style={{ height: '100%', width: `${total > 0 ? (done / total) * 100 : 0}%`, background: 'linear-gradient(90deg,#22c55e,#16a34a)', borderRadius: 2, transition: 'width 0.5s ease' }} />
+                </div>
+              </div>
+            </div>
+          </div>
+        </header>
+      );
+    }
+
+    // ─── DEMAND MODAL ──────────────────────────────────────────────────────────
+
+    const inputStyle = { background: 'var(--bg-card)', border: '1px solid var(--border-accent)', borderRadius: 6, color: 'var(--text-primary)', fontSize: 13, fontFamily: 'var(--font-body)', padding: '6px 10px', outline: 'none', width: '100%' };
+    const labelStyle = { fontSize: 11, fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-muted)', marginBottom: 6, display: 'block' };
+    function btnStyle(bg, color = 'var(--text-primary)') {
+      return { background: bg, border: '1px solid var(--border)', borderRadius: 7, color, fontSize: 12, fontWeight: 500, fontFamily: 'var(--font-body)', padding: '6px 12px', cursor: 'pointer', transition: 'all 0.15s', whiteSpace: 'nowrap' };
+    }
+
+    function DemandModal({ demand, onClose, onUpdate, onDelete, onAddComment }) {
+      const [editing, setEditing] = useState(false);
+      const [form, setForm] = useState({ ...demand });
+      const [commentText, setCommentText] = useState('');
+      const [commentAuthor, setCommentAuthor] = useState('');
+      const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+      const [tagInput, setTagInput] = useState('');
+
+      useEffect(() => { setForm({ ...demand }); }, [demand]);
+      useEffect(() => {
+        const handler = e => { if (e.key === 'Escape') onClose(); };
+        window.addEventListener('keydown', handler);
+        return () => window.removeEventListener('keydown', handler);
+      }, [onClose]);
+
+      const priority = PRIORITY_CONFIG[demand.priority];
+      const status = STATUS_CONFIG[demand.status];
+      const category = CATEGORY_CONFIG[demand.category];
+
+      const handleSave = () => { onUpdate(demand.id, form); setEditing(false); };
+      const handleAddComment = () => {
+        if (!commentText.trim() || !commentAuthor.trim()) return;
+        onAddComment(demand.id, commentAuthor, commentText);
+        setCommentText('');
+      };
+      const handleAddTag = e => {
+        if (e.key === 'Enter' && tagInput.trim()) {
+          e.preventDefault();
+          if (!form.tags.includes(tagInput.trim())) setForm({ ...form, tags: [...form.tags, tagInput.trim()] });
+          setTagInput('');
+        }
+      };
+
+      return (
+        <div
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20, animation: 'fadeIn 0.2s ease-out' }}
+          onClick={e => { if (e.target === e.currentTarget) onClose(); }}
+        >
+          <div style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-accent)', borderRadius: 16, width: '100%', maxWidth: 720, maxHeight: '90vh', overflow: 'hidden', display: 'flex', flexDirection: 'column', animation: 'scaleIn 0.2s ease-out', boxShadow: '0 25px 60px rgba(0,0,0,0.5)' }}>
+            {/* Header */}
+            <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0 }}>
+                <span style={{ fontSize: 18, color: category.color }}>{category.icon}</span>
+                {editing ? (
+                  <input value={form.title} onChange={e => setForm({ ...form, title: e.target.value })}
+                    style={{ background: 'var(--bg-card)', border: '1px solid var(--border-accent)', borderRadius: 6, color: 'var(--text-primary)', fontSize: 16, fontWeight: 600, fontFamily: 'var(--font-body)', padding: '4px 10px', flex: 1, outline: 'none' }} />
+                ) : (
+                  <h2 style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 17, color: 'var(--text-primary)', letterSpacing: '-0.3px', flex: 1, margin: 0 }}>{demand.title}</h2>
+                )}
+              </div>
+              <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                {editing ? (
+                  <>
+                    <button onClick={handleSave} style={btnStyle('var(--accent-orange)', '#fff')}>Salvar</button>
+                    <button onClick={() => { setForm({ ...demand }); setEditing(false); }} style={btnStyle('var(--bg-card)')}>Cancelar</button>
+                  </>
+                ) : (
+                  <>
+                    <button onClick={() => setEditing(true)} style={btnStyle('var(--bg-card)')}>✎ Editar</button>
+                    <button onClick={() => setShowDeleteConfirm(true)} style={btnStyle('rgba(239,68,68,0.15)', '#ef4444')}>✕</button>
+                  </>
+                )}
+                <button onClick={onClose} style={{ ...btnStyle('var(--bg-card)'), fontSize: 18, padding: '4px 8px' }}>⊠</button>
+              </div>
+            </div>
+
+            {/* Body */}
+            <div style={{ flex: 1, overflowY: 'auto', padding: '0 20px 20px' }}>
+              {/* Badges */}
+              <div style={{ display: 'flex', gap: 8, padding: '14px 0', flexWrap: 'wrap' }}>
+                {editing ? (
+                  <>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      <label style={{ ...labelStyle, marginBottom: 0 }}>Status</label>
+                      <select value={form.status} onChange={e => setForm({ ...form, status: e.target.value })} style={inputStyle}>
+                        {Object.entries(STATUS_CONFIG).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+                      </select>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      <label style={{ ...labelStyle, marginBottom: 0 }}>Prioridade</label>
+                      <select value={form.priority} onChange={e => setForm({ ...form, priority: e.target.value })} style={inputStyle}>
+                        {Object.entries(PRIORITY_CONFIG).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+                      </select>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      <label style={{ ...labelStyle, marginBottom: 0 }}>Categoria</label>
+                      <select value={form.category} onChange={e => setForm({ ...form, category: e.target.value })} style={inputStyle}>
+                        {Object.entries(CATEGORY_CONFIG).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+                      </select>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <span className="tag-badge" style={{ background: status.bg, color: status.color, border: `1px solid ${status.border}` }}>{status.icon} {status.label}</span>
+                    <span className="tag-badge" style={{ background: priority.bg, color: priority.color, border: `1px solid ${priority.border}` }}>{demand.priority}</span>
+                    <span className="tag-badge" style={{ background: 'var(--bg-card)', color: category.color, border: '1px solid var(--border)' }}>{category.icon} {category.label}</span>
+                  </>
+                )}
+              </div>
+
+              {/* Grid fields */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 }}>
+                <div>
+                  <label style={labelStyle}>Solicitante</label>
+                  {editing ? <input value={form.requester} onChange={e => setForm({ ...form, requester: e.target.value })} style={inputStyle} />
+                    : <div style={{ fontSize: 13, color: 'var(--text-primary)' }}>{demand.requester}</div>}
+                </div>
+                <div>
+                  <label style={labelStyle}>Responsável</label>
+                  {editing ? (
+                    <select value={form.assignee || ''} onChange={e => setForm({ ...form, assignee: e.target.value || undefined })} style={inputStyle}>
+                      <option value="">— Não atribuído —</option>
+                      {TEAM_MEMBERS.map(m => <option key={m} value={m}>{m}</option>)}
+                    </select>
+                  ) : <div style={{ fontSize: 13, color: 'var(--text-primary)' }}>{demand.assignee || <span style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>Não atribuído</span>}</div>}
+                </div>
+                <div>
+                  <label style={labelStyle}>Prazo</label>
+                  {editing ? <input type="date" value={form.dueDate ? form.dueDate.slice(0, 10) : ''} onChange={e => setForm({ ...form, dueDate: e.target.value ? new Date(e.target.value).toISOString() : undefined })} style={inputStyle} />
+                    : <div style={{ fontSize: 13, color: 'var(--text-primary)' }}>{formatDate(demand.dueDate)}</div>}
+                </div>
+                <div>
+                  <label style={labelStyle}>Progresso</label>
+                  {editing ? (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <input type="range" min={0} max={100} value={form.progress} onChange={e => setForm({ ...form, progress: +e.target.value })} style={{ flex: 1 }} />
+                      <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--accent-orange)', minWidth: 32 }}>{form.progress}%</span>
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <div style={{ flex: 1, height: 6, background: 'var(--bg-primary)', borderRadius: 3, overflow: 'hidden' }}>
+                        <div style={{ height: '100%', width: `${demand.progress}%`, background: 'linear-gradient(90deg,#f97316,#ea580c)', borderRadius: 3 }} />
+                      </div>
+                      <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--accent-orange)' }}>{demand.progress}%</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Description */}
+              <div style={{ marginBottom: 16 }}>
+                <label style={labelStyle}>Descrição</label>
+                {editing ? (
+                  <textarea value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} rows={4}
+                    style={{ ...inputStyle, resize: 'vertical', minHeight: 90 }} />
+                ) : (
+                  <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.7, background: 'var(--bg-card)', padding: '12px 14px', borderRadius: 8, border: '1px solid var(--border)', margin: 0 }}>{demand.description}</p>
+                )}
+              </div>
+
+              {/* Tags */}
+              <div style={{ marginBottom: 20 }}>
+                <label style={labelStyle}>Tags</label>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
+                  {(editing ? form.tags : demand.tags).map(tag => (
+                    <span key={tag} style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 6, padding: '3px 10px', fontSize: 12, fontFamily: 'var(--font-mono)', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 4 }}>
+                      #{tag}
+                      {editing && <button onClick={() => setForm({ ...form, tags: form.tags.filter(t => t !== tag) })} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 12, padding: 0, lineHeight: 1 }}>×</button>}
+                    </span>
+                  ))}
+                  {editing && (
+                    <input value={tagInput} onChange={e => setTagInput(e.target.value)} onKeyDown={handleAddTag}
+                      placeholder="+ nova tag (Enter)" style={{ ...inputStyle, width: 140, fontSize: 12 }} />
+                  )}
+                </div>
+              </div>
+
+              {/* Comments */}
+              <div style={{ borderTop: '1px solid var(--border)', paddingTop: 16 }}>
+                <label style={{ ...labelStyle, display: 'block', marginBottom: 12 }}>Comentários ({demand.comments.length})</label>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 14 }}>
+                  {demand.comments.length === 0 ? (
+                    <p style={{ fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic' }}>Nenhum comentário ainda.</p>
+                  ) : demand.comments.map(c => (
+                    <div key={c.id} style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 12px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                        <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--accent-orange)' }}>{c.author}</span>
+                        <span style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>{new Date(c.createdAt).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</span>
+                      </div>
+                      <p style={{ fontSize: 13, color: 'var(--text-secondary)', margin: 0, lineHeight: 1.5 }}>{c.text}</p>
+                    </div>
+                  ))}
+                </div>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <select value={commentAuthor} onChange={e => setCommentAuthor(e.target.value)} style={{ ...inputStyle, width: 160, flexShrink: 0 }}>
+                    <option value="">Seu nome</option>
+                    {TEAM_MEMBERS.map(m => <option key={m} value={m}>{m}</option>)}
+                  </select>
+                  <input value={commentText} onChange={e => setCommentText(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') handleAddComment(); }}
+                    placeholder="Adicionar comentário... (Enter)" style={{ ...inputStyle, flex: 1 }} />
+                  <button onClick={handleAddComment} disabled={!commentText.trim() || !commentAuthor.trim()}
+                    style={{ ...btnStyle('var(--accent-orange)', '#fff'), opacity: (!commentText.trim() || !commentAuthor.trim()) ? 0.5 : 1, cursor: (!commentText.trim() || !commentAuthor.trim()) ? 'not-allowed' : 'pointer' }}>
+                    Enviar
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {showDeleteConfirm && (
+            <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <div style={{ background: 'var(--bg-secondary)', border: '1px solid rgba(239,68,68,0.4)', borderRadius: 12, padding: 24, maxWidth: 360, textAlign: 'center' }}>
+                <div style={{ fontSize: 32, marginBottom: 12 }}>⚠️</div>
+                <h3 style={{ fontFamily: 'var(--font-display)', fontSize: 16, marginBottom: 8, color: 'var(--text-primary)' }}>Excluir demanda?</h3>
+                <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 20 }}>Esta ação não pode ser desfeita.</p>
+                <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
+                  <button onClick={() => setShowDeleteConfirm(false)} style={btnStyle('var(--bg-card)')}>Cancelar</button>
+                  <button onClick={() => { onDelete(demand.id); onClose(); }} style={btnStyle('rgba(239,68,68,0.2)', '#ef4444')}>Excluir</button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    // ─── NEW DEMAND MODAL ──────────────────────────────────────────────────────
+
+    const DEFAULT_FORM = { title: '', description: '', category: 'feature', priority: 'média', status: 'backlog', requester: '', assignee: undefined, dueDate: undefined, tags: [] };
+
+    function NewDemandModal({ onClose, onSubmit }) {
+      const [form, setForm] = useState({ ...DEFAULT_FORM });
+      const [tagInput, setTagInput] = useState('');
+      const [errors, setErrors] = useState({});
+      const [step, setStep] = useState(1);
+
+      useEffect(() => {
+        const handler = e => { if (e.key === 'Escape') onClose(); };
+        window.addEventListener('keydown', handler);
+        return () => window.removeEventListener('keydown', handler);
+      }, [onClose]);
+
+      const ni = { background: 'var(--bg-card)', border: '1px solid var(--border-accent)', borderRadius: 8, color: 'var(--text-primary)', fontSize: 14, fontFamily: 'var(--font-body)', padding: '9px 12px', outline: 'none', width: '100%', transition: 'border-color 0.15s' };
+      const nl = { fontSize: 11, fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-muted)', marginBottom: 6, display: 'block' };
+
+      const validateStep1 = () => {
+        const e = {};
+        if (!form.title.trim()) e.title = 'Título obrigatório';
+        if (!form.description.trim()) e.description = 'Descrição obrigatória';
+        setErrors(e);
+        return Object.keys(e).length === 0;
+      };
+
+      const handleSubmit = () => {
+        const e = {};
+        if (!form.requester.trim()) e.requester = 'Solicitante obrigatório';
+        setErrors(e);
+        if (Object.keys(e).length > 0) return;
+        onSubmit(form);
+        onClose();
+      };
+
+      const handleAddTag = e => {
+        if (e.key === 'Enter' && tagInput.trim()) {
+          e.preventDefault();
+          if (!form.tags.includes(tagInput.trim())) setForm({ ...form, tags: [...form.tags, tagInput.trim()] });
+          setTagInput('');
+        }
+      };
+
+      return (
+        <div
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(4px)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20, animation: 'fadeIn 0.2s ease-out' }}
+          onClick={e => { if (e.target === e.currentTarget) onClose(); }}
+        >
+          <div style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-accent)', borderRadius: 16, width: '100%', maxWidth: 580, maxHeight: '90vh', overflow: 'hidden', display: 'flex', flexDirection: 'column', animation: 'scaleIn 0.2s ease-out', boxShadow: '0 25px 60px rgba(0,0,0,0.5)' }}>
+            {/* Header */}
+            <div style={{ padding: '18px 20px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div>
+                <h2 style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 18, color: 'var(--text-primary)', letterSpacing: '-0.4px', margin: 0, lineHeight: 1 }}>Nova Demanda</h2>
+                <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '4px 0 0', fontFamily: 'var(--font-mono)' }}>Passo {step} de 2</p>
+              </div>
+              <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                {[1, 2].map(s => (
+                  <div key={s} style={{ width: s === step ? 24 : 8, height: 8, borderRadius: 4, background: s === step ? 'var(--accent-orange)' : s < step ? '#22c55e' : 'var(--border)', transition: 'all 0.3s' }} />
+                ))}
+                <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 18, padding: '2px 6px', marginLeft: 8 }}>×</button>
+              </div>
+            </div>
+
+            {/* Content */}
+            <div style={{ flex: 1, overflowY: 'auto', padding: 20 }}>
+              {step === 1 ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                  <div>
+                    <label style={nl}>Título da demanda *</label>
+                    <input autoFocus value={form.title} onChange={e => setForm({ ...form, title: e.target.value })}
+                      placeholder="Ex: Integração com sistema de pagamento"
+                      style={{ ...ni, borderColor: errors.title ? '#ef4444' : undefined }} />
+                    {errors.title && <span style={{ fontSize: 11, color: '#ef4444', marginTop: 4, display: 'block' }}>{errors.title}</span>}
+                  </div>
+                  <div>
+                    <label style={nl}>Descrição *</label>
+                    <textarea value={form.description} onChange={e => setForm({ ...form, description: e.target.value })}
+                      placeholder="Descreva o que precisa ser feito..." rows={4}
+                      style={{ ...ni, resize: 'vertical', borderColor: errors.description ? '#ef4444' : undefined }} />
+                    {errors.description && <span style={{ fontSize: 11, color: '#ef4444', marginTop: 4, display: 'block' }}>{errors.description}</span>}
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                    <div>
+                      <label style={nl}>Categoria</label>
+                      <select value={form.category} onChange={e => setForm({ ...form, category: e.target.value })} style={ni}>
+                        <option value="feature">✦ Nova Funcionalidade</option>
+                        <option value="bug">⚠ Correção de Bug</option>
+                        <option value="melhoria">↑ Melhoria</option>
+                        <option value="infraestrutura">⚙ Infraestrutura</option>
+                        <option value="integracao">⇌ Integração</option>
+                        <option value="relatorio">▤ Relatório</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label style={nl}>Prioridade</label>
+                      <select value={form.priority} onChange={e => setForm({ ...form, priority: e.target.value })} style={ni}>
+                        <option value="crítica">🔴 Crítica</option>
+                        <option value="alta">🟠 Alta</option>
+                        <option value="média">🟡 Média</option>
+                        <option value="baixa">🟢 Baixa</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                    <div>
+                      <label style={nl}>Solicitante *</label>
+                      <input value={form.requester} onChange={e => setForm({ ...form, requester: e.target.value })}
+                        placeholder="Setor ou pessoa" style={{ ...ni, borderColor: errors.requester ? '#ef4444' : undefined }} />
+                      {errors.requester && <span style={{ fontSize: 11, color: '#ef4444', marginTop: 4, display: 'block' }}>{errors.requester}</span>}
+                    </div>
+                    <div>
+                      <label style={nl}>Responsável</label>
+                      <select value={form.assignee || ''} onChange={e => setForm({ ...form, assignee: e.target.value || undefined })} style={ni}>
+                        <option value="">— Não atribuído —</option>
+                        {TEAM_MEMBERS.map(m => <option key={m} value={m}>{m}</option>)}
+                      </select>
+                    </div>
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                    <div>
+                      <label style={nl}>Status inicial</label>
+                      <select value={form.status} onChange={e => setForm({ ...form, status: e.target.value })} style={ni}>
+                        <option value="backlog">○ Backlog</option>
+                        <option value="em_analise">◐ Em Análise</option>
+                        <option value="em_desenvolvimento">◑ Em Desenvolvimento</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label style={nl}>Prazo</label>
+                      <input type="date" value={form.dueDate ? form.dueDate.slice(0, 10) : ''} onChange={e => setForm({ ...form, dueDate: e.target.value ? new Date(e.target.value).toISOString() : undefined })} style={ni} />
+                    </div>
+                  </div>
+                  <div>
+                    <label style={nl}>Tags</label>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
+                      {form.tags.map(tag => (
+                        <span key={tag} style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 6, padding: '3px 10px', fontSize: 12, fontFamily: 'var(--font-mono)', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 4 }}>
+                          #{tag}
+                          <button onClick={() => setForm({ ...form, tags: form.tags.filter(t => t !== tag) })} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 12, padding: 0 }}>×</button>
+                        </span>
+                      ))}
+                    </div>
+                    <input value={tagInput} onChange={e => setTagInput(e.target.value)} onKeyDown={handleAddTag}
+                      placeholder="Adicionar tag (pressione Enter)" style={ni} />
+                    <p style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4, fontFamily: 'var(--font-mono)' }}>Sugestões: GPS, API, Mobile, Bug, Frota, Fiscal, AWS</p>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div style={{ padding: '14px 20px', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+              <button onClick={step === 2 ? () => setStep(1) : onClose}
+                style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text-secondary)', fontSize: 13, padding: '9px 16px', cursor: 'pointer', fontFamily: 'var(--font-body)' }}>
+                {step === 2 ? '← Voltar' : 'Cancelar'}
+              </button>
+              {step === 1 ? (
+                <button onClick={() => { if (validateStep1()) setStep(2); }}
+                  style={{ background: 'var(--accent-orange)', border: 'none', borderRadius: 8, color: '#fff', fontSize: 13, fontWeight: 600, padding: '9px 20px', cursor: 'pointer', fontFamily: 'var(--font-body)' }}>
+                  Próximo →
+                </button>
+              ) : (
+                <button onClick={handleSubmit}
+                  style={{ background: 'linear-gradient(135deg,#f97316,#c2410c)', border: 'none', borderRadius: 8, color: '#fff', fontSize: 13, fontWeight: 600, padding: '9px 24px', cursor: 'pointer', fontFamily: 'var(--font-body)', boxShadow: '0 4px 12px rgba(249,115,22,0.3)' }}>
+                  ✓ Criar Demanda
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // ─── APP ───────────────────────────────────────────────────────────────────
+
+    const DEFAULT_FILTERS = { search: '', status: 'todas', priority: 'todas', category: 'todas', assignee: '' };
+
+    function App() {
+      const [demands, setDemands] = useState([]);
+      const [filters, setFilters] = useState(DEFAULT_FILTERS);
+      const [view, setView] = useState('kanban');
+      const [selectedDemand, setSelectedDemand] = useState(null);
+      const [showNewModal, setShowNewModal] = useState(false);
+
+      useEffect(() => { setDemands(loadDemands()); }, []);
+
+      const filteredDemands = useMemo(() => demands.filter(d => {
+        if (filters.search) {
+          const q = filters.search.toLowerCase();
+          if (!d.title.toLowerCase().includes(q) && !d.description.toLowerCase().includes(q) && !d.requester.toLowerCase().includes(q) && !d.tags.some(t => t.toLowerCase().includes(q))) return false;
+        }
+        if (filters.status !== 'todas' && d.status !== filters.status) return false;
+        if (filters.priority !== 'todas' && d.priority !== filters.priority) return false;
+        if (filters.category !== 'todas' && d.category !== filters.category) return false;
+        if (filters.assignee && d.assignee !== filters.assignee) return false;
+        return true;
+      }), [demands, filters]);
+
+      const handleUpdate = (id, updates) => {
+        const current = demands.find(d => d.id === id);
+        if (!current) return;
+        const updated = { ...current, ...updates, updatedAt: new Date().toISOString() };
+        const newDemands = demands.map(d => d.id === id ? updated : d);
+        saveDemands(newDemands);
+        setDemands(newDemands);
+        if (selectedDemand?.id === id) setSelectedDemand(updated);
+      };
+
+      const handleDelete = (id) => {
+        const newDemands = demands.filter(d => d.id !== id);
+        saveDemands(newDemands);
+        setDemands(newDemands);
+        setSelectedDemand(null);
+      };
+
+      const handleAddComment = (demandId, author, text) => {
+        const comment = { id: uuid(), author, text, createdAt: new Date().toISOString() };
+        const current = demands.find(d => d.id === demandId);
+        if (!current) return;
+        const updated = { ...current, comments: [...current.comments, comment], updatedAt: new Date().toISOString() };
+        const newDemands = demands.map(d => d.id === demandId ? updated : d);
+        saveDemands(newDemands);
+        setDemands(newDemands);
+        if (selectedDemand?.id === demandId) setSelectedDemand(updated);
+      };
+
+      const handleNewDemand = (data) => {
+        const demand = { ...data, id: uuid(), createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), comments: [], progress: 0 };
+        const newDemands = [demand, ...demands];
+        saveDemands(newDemands);
+        setDemands(newDemands);
+      };
+
+      return (
+        <div style={{ minHeight: '100vh', background: 'var(--bg-primary)' }}>
+          <Header demands={demands} onNewDemand={() => setShowNewModal(true)} view={view} onViewChange={setView} />
+          <FilterBar filters={filters} onChange={setFilters} totalCount={demands.length} filteredCount={filteredDemands.length} />
+          <main>
+            {view === 'kanban' ? (
+              <KanbanView demands={filteredDemands} onCardClick={setSelectedDemand} onStatusChange={(id, status) => handleUpdate(id, { status })} />
+            ) : (
+              <ListView demands={filteredDemands} onCardClick={setSelectedDemand} />
+            )}
+          </main>
+          {selectedDemand && (
+            <DemandModal demand={selectedDemand} onClose={() => setSelectedDemand(null)} onUpdate={handleUpdate} onDelete={handleDelete} onAddComment={handleAddComment} />
+          )}
+          {showNewModal && (
+            <NewDemandModal onClose={() => setShowNewModal(false)} onSubmit={handleNewDemand} />
+          )}
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>
